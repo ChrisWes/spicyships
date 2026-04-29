@@ -216,7 +216,7 @@ window.addEventListener('resize',setMapHeight);setMapHeight();
 
 function initMap(){
   map=L.map('map',{center:[HOME.lat,HOME.lng],zoom:12,zoomControl:false});
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_noctis/{z}/{x}/{y}{r}.png',{attribution:'&copy; OSM &copy; CARTO',maxZoom:18}).addTo(map);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap contributors &copy; CARTO',maxZoom:19}).addTo(map);
   L.circle([HOME.lat,HOME.lng],{radius:5*1852,color:'#2ab5c8',weight:1,fill:false,dashArray:'5,8',opacity:0.5}).addTo(map);
   L.circle([HOME.lat,HOME.lng],{radius:ALERT_NM*1852,color:'#d64040',weight:1.5,fill:true,fillColor:'#d64040',fillOpacity:0.05,dashArray:'3,5'}).addTo(map);
   L.marker([HOME.lat,HOME.lng],{icon:L.divIcon({html:'<div style="font-size:22px;filter:drop-shadow(0 0 3px rgba(240,192,64,0.8))">⚓</div>',className:'',iconSize:[24,24],iconAnchor:[12,20]})}).addTo(map).bindPopup('<b style="color:#0e1f35">Spice Island</b>');
