@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>The Weston-Kleinman Spice Island Ship Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Cabin:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0e1f35;--surface:#152840;--surface2:#1c3352;
+  --gold:#c9a84c;--gold-bright:#f0c040;--teal:#2ab5c8;--teal-dim:#1a7a8a;
+  --red:#d64040;--green:#3aaa6a;--amber:#e09030;
+  --text:#dde8f5;--text-dim:#7898ba;--border:rgba(100,160,220,0.18);
+}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Cabin',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;height:100vh;}
+
+/* HEADER */
+.header{background:var(--surface);border-bottom:2px solid var(--gold);flex-shrink:0;padding:8px 12px;}
+.header-top{display:flex;align-items:center;gap:10px;}
+.flag{font-size:24px;flex-shrink:0;}
+.title-block{flex:1;min-width:0;}
+.title{font-family:'Pirata One',cursive;font-size:17px;color:var(--gold-bright);line-height:1.15;text-shadow:0 1px 4px rgba(0,0,0,0.5);}
+.subtitle{font-size:10px;color:var(--text-dim);letter-spacing:0.1em;text-transform:uppercase;margin-top:1px;}
+.header-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.conn-pill{display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:10px;color:var(--text-dim);letter-spacing:0.08em;text-transform:uppercase;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0;}
+.dot.live{background:var(--green);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+.ship-count-pill{font-family:'Pirata One',cursive;font-size:20px;color:var(--gold-bright);min-width:24px;text-align:right;}
+.notify-btn{background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:4px;padding:3px 8px;font-size:10px;font-family:'Cabin',sans-serif;cursor:pointer;letter-spacing:0.06em;text-transform:uppercase;flex-shrink:0;}
+.notify-btn.on{border-color:var(--green);color:var(--green);}
+
+/* MAP */
+#map{width:100%;flex-shrink:0;}
+
+/* PANEL */
+.panel{flex:1;overflow-y:auto;background:var(--surface);}
+
+/* TABS */
+.tabs{display:flex;border-bottom:1px solid var(--border);}
+.tab{flex:1;padding:9px 6px;text-align:center;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;}
+.tab.active{color:var(--gold-bright);border-bottom-color:var(--gold);}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
+/* SHIP ROWS */
+.ship-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.12s;-webkit-tap-highlight-color:rgba(100,180,255,0.08);}
+.ship-row:active{background:rgba(100,180,255,0.06);}
+.s-emoji{font-size:22px;flex-shrink:0;}
+.s-info{flex:1;min-width:0;}
+.s-name{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);}
+.s-meta{font-size:11px;color:var(--text-dim);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.06em;padding:1px 6px;border-radius:10px;text-transform:uppercase;}
+.badge-ferry{background:rgba(240,192,64,0.15);color:var(--gold);border:1px solid rgba(240,192,64,0.3);}
+.badge-cargo{background:rgba(42,181,200,0.12);color:var(--teal);border:1px solid rgba(42,181,200,0.3);}
+.badge-tanker{background:rgba(214,64,64,0.12);color:var(--red);border:1px solid rgba(214,64,64,0.3);}
+.badge-tug{background:rgba(58,170,106,0.12);color:var(--green);border:1px solid rgba(58,170,106,0.3);}
+.badge-sail{background:rgba(224,144,48,0.15);color:var(--amber);border:1px solid rgba(224,144,48,0.3);}
+.badge-other{background:rgba(120,152,186,0.12);color:var(--text-dim);border:1px solid var(--border);}
+.s-right{text-align:right;flex-shrink:0;}
+.s-dist{font-family:'Pirata One',cursive;font-size:18px;color:var(--teal);}
+.s-dist-unit{font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;}
+.s-spd{font-size:10px;color:var(--text-dim);margin-top:1px;}
+
+.empty-row{padding:24px 16px;text-align:center;color:var(--text-dim);font-size:13px;font-style:italic;}
+
+/* WATCH */
+.watch-row{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);}
+.w-icon{font-size:16px;flex-shrink:0;}
+.w-name{flex:1;font-weight:700;font-size:13px;color:var(--text);}
+.w-spotted{font-size:10px;background:rgba(58,170,106,0.15);color:var(--green);border:1px solid rgba(58,170,106,0.3);border-radius:10px;padding:2px 8px;white-space:nowrap;}
+.w-looking{font-size:10px;color:var(--text-dim);font-style:italic;}
+.w-del{background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;padding:0 2px;}
+.w-del:hover{color:var(--red);}
+
+.add-watch{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--border);background:var(--bg);}
+.add-watch input{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Cabin',sans-serif;font-size:13px;padding:8px 10px;border-radius:6px;outline:none;}
+.add-watch input:focus{border-color:var(--teal);}
+.add-watch button{background:var(--teal-dim);border:none;color:var(--text);font-family:'Pirata One',cursive;font-size:14px;padding:8px 14px;border-radius:6px;cursor:pointer;flex-shrink:0;}
+.add-watch button:active{background:var(--teal);}
+
+/* SHEET */
+.sheet-overlay{display:none;position:fixed;inset:0;background:rgba(0,10,25,0.8);z-index:9000;align-items:flex-end;justify-content:center;}
+.sheet-overlay.open{display:flex;}
+.sheet{background:var(--surface);border:1px solid var(--border);border-radius:18px 18px 0 0;padding:16px 16px 32px;width:100%;max-width:480px;animation:sup 0.28s cubic-bezier(0.175,0.885,0.32,1.275);}
+@keyframes sup{from{transform:translateY(100%);}to{transform:translateY(0);}}
+.sheet-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 14px;}
+.sheet-name{font-family:'Pirata One',cursive;font-size:22px;color:var(--gold-bright);margin-bottom:2px;}
+.sheet-comment{font-size:12px;color:var(--text-dim);font-style:italic;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+.sheet-row{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.sheet-row:last-of-type{border-bottom:none;}
+.sheet-key{color:var(--text-dim);}
+.sheet-val{font-weight:700;color:var(--text);text-align:right;max-width:58%;}
+.sheet-btns{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+.sheet-btns a,.sheet-btns button{flex:1;min-width:100px;padding:10px 8px;border-radius:8px;text-align:center;font-size:11px;font-weight:700;text-decoration:none;border:none;cursor:pointer;letter-spacing:0.05em;text-transform:uppercase;}
+.btn-mt{background:var(--surface2);color:var(--teal);border:1px solid var(--border);}
+.btn-vf{background:var(--surface2);color:var(--text-dim);border:1px solid var(--border);}
+.btn-wl{background:var(--teal-dim);color:var(--text);}
+.btn-cl{background:var(--surface2);color:var(--text-dim);border:1px solid var(--border);}
+
+/* ALERT */
+.alert-bar{display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--surface);border-bottom:2px solid var(--gold);padding:10px 14px;animation:slidedown 0.3s ease;}
+.alert-bar.open{display:block;}
+@keyframes slidedown{from{transform:translateY(-100%);}to{transform:translateY(0);}}
+.alert-inner{display:flex;align-items:center;gap:10px;max-width:480px;margin:0 auto;}
+.alert-bell{font-size:22px;animation:ring 0.6s ease-in-out 3;flex-shrink:0;}
+@keyframes ring{0%,100%{transform:rotate(0);}25%{transform:rotate(-18deg);}75%{transform:rotate(18deg);}}
+.alert-text{flex:1;min-width:0;}
+.alert-title{font-family:'Pirata One',cursive;font-size:14px;color:var(--gold-bright);}
+.alert-body{font-size:11px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.alert-ack{background:var(--gold);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-family:'Pirata One',cursive;font-size:13px;cursor:pointer;flex-shrink:0;}
+</style>
+</head>
+<body>
+
+<div class="alert-bar" id="alertBar">
+  <div class="alert-inner">
+    <span class="alert-bell">🔔</span>
+    <div class="alert-text">
+      <div class="alert-title" id="aTitle">Ship spotted!</div>
+      <div class="alert-body" id="aBody"></div>
+    </div>
+    <button class="alert-ack" onclick="dismissAlert()">Roger that</button>
+  </div>
+</div>
+
+<div class="sheet-overlay" id="sheetOverlay" onclick="closeSheet(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-name" id="sName"></div>
+    <div class="sheet-comment" id="sComment"></div>
+    <div id="sRows"></div>
+    <div class="sheet-btns">
+      <a class="btn-mt" id="sMTLink" href="#" target="_blank">MarineTraffic</a>
+      <a class="btn-vf" id="sVFLink" href="#" target="_blank">VesselFinder</a>
+      <button class="btn-wl" id="sWatchBtn">+ Watch list</button>
+      <button class="btn-cl" onclick="closeSheet()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="header">
+  <div class="header-top">
+    <div class="flag">🏴‍☠️</div>
+    <div class="title-block">
+      <div class="title">The Weston-Kleinman Spice Island Ship Tracker</div>
+      <div class="subtitle">Spice Island, Portsmouth &bull; Live AIS</div>
+    </div>
+    <div class="header-right">
+      <div class="conn-pill"><span class="dot" id="dot"></span><span id="connTxt">Offline</span></div>
+      <button class="notify-btn" id="notifyBtn" onclick="toggleNotify()">🔕 Alerts</button>
+      <span class="ship-count-pill" id="shipCount">0</span>
+    </div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<div class="panel">
+  <div class="tabs">
+    <div class="tab active" id="tab0btn" onclick="setTab(0)">⚓ Vessels</div>
+    <div class="tab" id="tab1btn" onclick="setTab(1)">👁 Watch List</div>
+  </div>
+  <div class="tab-panel active" id="tab0">
+    <div id="shipList"><div class="empty-row">Scanning the Solent for vessels...</div></div>
+  </div>
+  <div class="tab-panel" id="tab1">
+    <div id="watchList"></div>
+    <div class="empty-row" id="watchEmpty">Nothing on watch. Add a vessel name or MMSI below.</div>
+    <div class="add-watch">
+      <input type="text" id="watchInput" placeholder="Vessel name or MMSI..." />
+      <button onclick="addWatch()">+ Watch</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_KEY='cf947c64c41d580ec59861fa0174e92335cd1244';
+const HOME={lat:50.7984,lng:-1.0980};
+const BBOX=[[50.70,-1.25],[50.90,-0.90]];
+const ALERT_NM=0.5;
+
+const EMOJIS={60:'⛴️',61:'⛴️',70:'🚢',71:'🚢',72:'🚢',80:'🛢️',81:'🛢️',30:'🎣',31:'⚓',32:'⚓',36:'⛵',37:'⛵',50:'🚤',51:'🆘',52:'⚓',55:'👮',0:'🚢'};
+const LABELS={60:'Passenger Ferry',61:'Passenger Ferry',70:'Cargo',71:'Cargo',72:'Cargo',80:'Tanker',81:'Tanker',30:'Fishing',31:'Tug',32:'Tug',36:'Sailing vessel',37:'Pleasure craft',50:'Pilot',51:'SAR',52:'Tug',55:'Port authority',0:'Unknown'};
+const BADGECLS={60:'badge-ferry',61:'badge-ferry',70:'badge-cargo',71:'badge-cargo',72:'badge-cargo',80:'badge-tanker',81:'badge-tanker',30:'badge-sail',36:'badge-sail',37:'badge-sail',31:'badge-tug',32:'badge-tug',52:'badge-tug'};
+
+const COMMENTS={
+  60:["The Isle of Wight ferry. Right on schedule, presumably.","Full of day-trippers, cyclists and people who've forgotten something.","Goes back and forth forever. Enviously simple life.","The Wightlink. Wave ironically from the battlements.","Passenger ferry. What it lacks in glamour it makes up for in frequency."],
+  70:["Big lad. Containing something. Probably not treasure, but one can hope.","The supply chain, in ship form. Very slow. Very important.","Contents: unknowable. Smell: memorable.","It displaces more water than your entire road.","Cargo ship. Going somewhere worthy. Eventually."],
+  80:["Handle with care. Do not light match.","Slow, enormous, and extremely flammable. Respect.","Our civilisation requires this. Awkward but true.","Tanker. Smells of petroleum and consequence.","Full of something you'd rather not spill."],
+  36:["Sailing vessel. Out here not giving a damn about deadlines.","Pure wind power. Showing off, frankly.","Someone's weekend. Someone's very good weekend.","No engine. Just vibes and the Solent wind."],
+  31:["The humble tug. Unglamorous, essential, brilliant.","Tugboat — the quiet professional of the harbour.","Doing the work no one talks about at dinner."],
+  50:["Pilot boat — the one who actually knows where the rocks are.","Local knowledge, incarnate."],
+  51:["SAR vessel. Out of the way, please. This is serious.","Rescue crew. Give them a respectful nod."],
+  30:["Fisherman. Up since before it was reasonable.","Out fishing. The optimism is admirable."],
+  0:["Unknown vessel. Doing mysterious things.","Mystery ship. Almost certainly not a submarine.","Unidentified. Possibly not supposed to be here. Possibly fine.","Who goes there? The AIS is being coy."]
+};
+
+function emo(t){const b=Math.floor((t||0)/10)*10;return EMOJIS[t]||EMOJIS[b]||'🚢';}
+function lbl(t){const b=Math.floor((t||0)/10)*10;return LABELS[t]||LABELS[b]||'Unknown';}
+function bdg(t){const b=Math.floor((t||0)/10)*10;return BADGECLS[t]||BADGECLS[b]||'badge-other';}
+function comment(t){const b=Math.floor((t||0)/10)*10;const a=COMMENTS[t]||COMMENTS[b]||COMMENTS[0];return a[Math.floor(Math.random()*a.length)];}
+function hav(la1,lo1,la2,lo2){const R=3440.065,r=Math.PI/180,a=Math.sin((la2-la1)*r/2)**2+Math.cos(la1*r)*Math.cos(la2*r)*Math.sin((lo2-lo1)*r/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+
+const ships={},markers={};
+let watchList=JSON.parse(localStorage.getItem('wkWatch')||'[]');
+let alerted={},alertQ=[],ws,map,notifyOn=Notification.permission==='granted';
+
+function setMapHeight(){document.getElementById('map').style.height=Math.round(window.innerHeight*0.42)+'px';}
+window.addEventListener('resize',setMapHeight);setMapHeight();
+
+function initMap(){
+  map=L.map('map',{center:[HOME.lat,HOME.lng],zoom:12,zoomControl:false});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_noctis/{z}/{x}/{y}{r}.png',{attribution:'&copy; OSM &copy; CARTO',maxZoom:18}).addTo(map);
+  L.circle([HOME.lat,HOME.lng],{radius:5*1852,color:'#2ab5c8',weight:1,fill:false,dashArray:'5,8',opacity:0.5}).addTo(map);
+  L.circle([HOME.lat,HOME.lng],{radius:ALERT_NM*1852,color:'#d64040',weight:1.5,fill:true,fillColor:'#d64040',fillOpacity:0.05,dashArray:'3,5'}).addTo(map);
+  L.marker([HOME.lat,HOME.lng],{icon:L.divIcon({html:'<div style="font-size:22px;filter:drop-shadow(0 0 3px rgba(240,192,64,0.8))">⚓</div>',className:'',iconSize:[24,24],iconAnchor:[12,20]})}).addTo(map).bindPopup('<b style="color:#0e1f35">Spice Island</b>');
+}
+
+function mkIcon(s){const hdg=s.heading??s.cog??0;return L.divIcon({html:`<div style="font-size:20px;line-height:1;transform:rotate(${hdg}deg);filter:drop-shadow(0 0 2px rgba(0,0,0,0.5))">${emo(s.type||0)}</div>`,className:'',iconSize:[22,22],iconAnchor:[11,11]});}
+
+function updMarker(mmsi){
+  const s=ships[mmsi];if(!s?.lat||!s?.lng)return;
+  if(markers[mmsi]){markers[mmsi].setLatLng([s.lat,s.lng]).setIcon(mkIcon(s));}
+  else{markers[mmsi]=L.marker([s.lat,s.lng],{icon:mkIcon(s)}).addTo(map).on('click',()=>showSheet(mmsi));}
+  markers[mmsi].bindTooltip(`<b>${s.name||'Unknown'}</b><br>${lbl(s.type||0)}`,{direction:'top',offset:[0,-8]});
+}
+
+function showSheet(mmsi){
+  const s=ships[mmsi];if(!s)return;
+  document.getElementById('sName').textContent=s.name||'Unknown Vessel';
+  document.getElementById('sComment').textContent=comment(s.type||0);
+  document.getElementById('sRows').innerHTML=[
+    ['Type',lbl(s.type||0)+' '+emo(s.type||0)],
+    ['Distance',s.dist?s.dist.toFixed(2)+' nm':'—'],
+    ['Speed',s.sog!=null?s.sog.toFixed(1)+' kts':'—'],
+    ['Heading',s.heading!=null?s.heading+'°':s.cog!=null?s.cog.toFixed(0)+'° (CoG)':'—'],
+    ['Destination',s.dest||'not declared'],
+    ['MMSI',mmsi],
+    ['Call sign',s.callsign||'—']
+  ].map(([k,v])=>`<div class="sheet-row"><span class="sheet-key">${k}</span><span class="sheet-val">${v}</span></div>`).join('');
+  document.getElementById('sMTLink').href=`https://www.marinetraffic.com/en/ais/details/ships/mmsi:${mmsi}`;
+  document.getElementById('sVFLink').href=`https://www.vesselfinder.com/?mmsi=${mmsi}`;
+  const wn=s.name||String(mmsi);
+  document.getElementById('sWatchBtn').onclick=()=>{addWatchItem(wn);closeSheet();};
+  document.getElementById('sheetOverlay').classList.add('open');
+}
+function closeSheet(e){if(e&&e.target!==document.getElementById('sheetOverlay'))return;document.getElementById('sheetOverlay').classList.remove('open');}
+
+function setTab(n){
+  [0,1].forEach(i=>{
+    document.getElementById('tab'+i+'btn').className='tab'+(i===n?' active':'');
+    document.getElementById('tab'+i).className='tab-panel'+(i===n?' active':'');
+  });
+}
+
+function renderShips(){
+  const sorted=Object.values(ships).filter(s=>s.lat&&s.lng&&s.dist!=null).sort((a,b)=>a.dist-b.dist);
+  document.getElementById('shipCount').textContent=sorted.length;
+  const el=document.getElementById('shipList');
+  if(!sorted.length){el.innerHTML='<div class="empty-row">Scanning the Solent for vessels...</div>';return;}
+  el.innerHTML=sorted.map(s=>`<div class="ship-row" onclick="showSheet('${s.mmsi}')">
+    <span class="s-emoji">${emo(s.type||0)}</span>
+    <div class="s-info">
+      <div class="s-name">${s.name||'Unknown Vessel'}</div>
+      <div class="s-meta">
+        <span class="badge ${bdg(s.type||0)}">${lbl(s.type||0)}</span>
+        ${s.dest?`<span>${s.dest}</span>`:''}
+      </div>
+    </div>
+    <div class="s-right">
+      <div class="s-dist">${s.dist.toFixed(2)}</div>
+      <div class="s-dist-unit">nm</div>
+      ${s.sog!=null?`<div class="s-spd">${s.sog.toFixed(1)} kts</div>`:''}
+    </div>
+  </div>`).join('');
+}
+
+function renderWatch(){
+  const el=document.getElementById('watchList');
+  document.getElementById('watchEmpty').style.display=watchList.length?'none':'block';
+  el.innerHTML=watchList.map((w,i)=>{
+    const m=Object.values(ships).find(s=>(s.name&&s.name.toUpperCase().includes(w.toUpperCase()))||String(s.mmsi)===w);
+    return`<div class="watch-row"${m?` onclick="showSheet('${m.mmsi}')"`:''}><span class="w-icon">${m?'👀':'🔭'}</span>
+      <span class="w-name">${w}</span>
+      ${m?`<span class="w-spotted">In range · ${m.dist?m.dist.toFixed(2)+'nm':''}</span>`:`<span class="w-looking">Not seen</span>`}
+      <button class="w-del" onclick="event.stopPropagation();rmWatch(${i})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function addWatch(){addWatchItem(document.getElementById('watchInput').value.trim());document.getElementById('watchInput').value='';}
+function addWatchItem(v){if(!v||watchList.includes(v))return;watchList.push(v);localStorage.setItem('wkWatch',JSON.stringify(watchList));renderWatch();}
+function rmWatch(i){watchList.splice(i,1);localStorage.setItem('wkWatch',JSON.stringify(watchList));renderWatch();}
+document.getElementById('watchInput').addEventListener('keydown',e=>{if(e.key==='Enter')addWatch();});
+
+function checkAlerts(mmsi){
+  const s=ships[mmsi];if(!s?.name)return;
+  const w=watchList.some(w=>(s.name&&s.name.toUpperCase().includes(w.toUpperCase()))||String(s.mmsi)===w);
+  if(w&&s.dist!=null&&s.dist<=ALERT_NM&&!alerted[mmsi]){alerted[mmsi]=true;alertQ.push(s);if(alertQ.length===1)fireAlert();}
+  if(s.dist>ALERT_NM*2)delete alerted[mmsi];
+}
+function fireAlert(){
+  if(!alertQ.length)return;const s=alertQ[0];
+  document.getElementById('aTitle').textContent=`${s.name||'Unknown'} — ship ahoy`;
+  document.getElementById('aBody').textContent=`${lbl(s.type||0)} · ${s.dist?s.dist.toFixed(2)+' nm':'very close'} · ${comment(s.type||0)}`;
+  document.getElementById('alertBar').classList.add('open');
+  if(notifyOn&&Notification.permission==='granted')new Notification('Ship spotted 🔔',{body:`${s.name||'A vessel'} is passing Spice Island (${s.dist?s.dist.toFixed(2)+' nm':'very close'})`});
+}
+function dismissAlert(){document.getElementById('alertBar').classList.remove('open');alertQ.shift();if(alertQ.length)setTimeout(fireAlert,800);}
+
+async function toggleNotify(){
+  if(Notification.permission==='granted'){notifyOn=!notifyOn;}
+  else if(Notification.permission!=='denied'){const p=await Notification.requestPermission();notifyOn=p==='granted';}
+  const btn=document.getElementById('notifyBtn');
+  btn.textContent=notifyOn?'🔔 Alerts on':'🔕 Alerts off';
+  btn.className='notify-btn'+(notifyOn?' on':'');
+}
+
+function setConn(on){document.getElementById('dot').className='dot'+(on?' live':'');document.getElementById('connTxt').textContent=on?'Live':'Offline';}
+
+function connect(){
+  ws=new WebSocket('wss://stream.aisstream.io/v0/stream');
+  ws.onopen=()=>{ws.send(JSON.stringify({APIKey:API_KEY,BoundingBoxes:[[[BBOX[0][0],BBOX[0][1]],[BBOX[1][0],BBOX[1][1]]]],FilterMessageTypes:['PositionReport','ShipStaticData']}));setConn(true);};
+  ws.onmessage=(ev)=>{
+    try{
+      const msg=JSON.parse(ev.data),meta=msg.MetaData||{};
+      const mmsi=String(meta.MMSI||'');if(!mmsi)return;
+      if(!ships[mmsi])ships[mmsi]={mmsi};
+      if(msg.MessageType==='PositionReport'){const p=msg.Message?.PositionReport||{};ships[mmsi].lat=meta.latitude||p.Latitude;ships[mmsi].lng=meta.longitude||p.Longitude;ships[mmsi].sog=p.Sog;ships[mmsi].cog=p.Cog;ships[mmsi].heading=p.TrueHeading!==511?p.TrueHeading:null;ships[mmsi].name=ships[mmsi].name||(meta.ShipName||'').trim()||undefined;}
+      if(msg.MessageType==='ShipStaticData'){const s=msg.Message?.ShipStaticData||{};ships[mmsi].name=((s.Name||meta.ShipName)||'').trim()||ships[mmsi].name;ships[mmsi].type=s.Type;ships[mmsi].dest=(s.Destination||'').trim();ships[mmsi].callsign=(s.CallSign||'').trim();if(!ships[mmsi].lat)ships[mmsi].lat=meta.latitude;if(!ships[mmsi].lng)ships[mmsi].lng=meta.longitude;}
+      if(ships[mmsi].lat&&ships[mmsi].lng){ships[mmsi].dist=hav(HOME.lat,HOME.lng,ships[mmsi].lat,ships[mmsi].lng);updMarker(mmsi);checkAlerts(mmsi);}
+      renderShips();renderWatch();
+    }catch(e){console.warn(e);}
+  };
+  ws.onclose=()=>{setConn(false);setTimeout(connect,8000);};
+  ws.onerror=()=>setConn(false);
+}
+
+initMap();connect();renderWatch();
+</script>
+<style>.leaflet-tooltip{font-family:'Cabin',sans-serif;font-size:11px;background:var(--surface);border:1px solid var(--border);color:var(--text);}</style>
+</body>
+</html>
