@@ -328,7 +328,10 @@ function connect(){
   ws.onopen=()=>{ws.send(JSON.stringify({APIKey:API_KEY,BoundingBoxes:[[[BBOX[0][0],BBOX[0][1]],[BBOX[1][0],BBOX[1][1]]]],FilterMessageTypes:['PositionReport','ShipStaticData']}));setConn(true);};
   ws.onmessage=(ev)=>{
     try{
-      const msg=JSON.parse(ev.data),meta=msg.MetaData||{};
+      const raw = ev.data instanceof Blob
+        ? await ev.data.text()
+        : ev.data;
+      const msg=JSON.parse(raw),meta=msg.MetaData||{};
       const mmsi=String(meta.MMSI||'');if(!mmsi)return;
       if(!ships[mmsi])ships[mmsi]={mmsi};
       if(msg.MessageType==='PositionReport'){const p=msg.Message?.PositionReport||{};ships[mmsi].lat=meta.latitude||p.Latitude;ships[mmsi].lng=meta.longitude||p.Longitude;ships[mmsi].sog=p.Sog;ships[mmsi].cog=p.Cog;ships[mmsi].heading=p.TrueHeading!==511?p.TrueHeading:null;ships[mmsi].name=ships[mmsi].name||(meta.ShipName||'').trim()||undefined;}
